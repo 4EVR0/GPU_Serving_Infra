@@ -1,24 +1,28 @@
 #!/bin/bash
 
 # GPU 서버 초기 세팅 스크립트
-# Vast.ai 새 인스턴스 빌린 후 실행
-# 사용법: ./setup_gpu.sh <TAILSCALE_AUTH_KEY> [HOSTNAME]
+# Vast.ai 새 인스턴스 빌린 후 실행 — 수동(인자) / 자동(onstart, 환경변수) 둘 다 지원.
 #
-# HOSTNAME을 고정하면 MagicDNS 주소가 항상 동일하게 유지됨
-# 예) ./setup_gpu.sh tskey-xxx vast-gpu-server-2
-# 주의: 이전 인스턴스는 Tailscale 관리 콘솔에서 삭제 후 사용 권장
+# 수동:   ./setup_gpu.sh <TAILSCALE_AUTH_KEY> [HOSTNAME]
+#         예) ./setup_gpu.sh tskey-xxx vast-gpu-server-2
+# onstart: 환경변수 TAILSCALE_AUTH_KEY (+ TAILSCALE_HOSTNAME) 설정 후 인자 없이 실행
+#         예) curl -fsSL .../setup_gpu.sh | bash
+#
+# HOSTNAME을 고정하면 MagicDNS 주소가 항상 동일하게 유지됨.
+# 주의: 이전 인스턴스는 Tailscale 콘솔에서 삭제 권장 (ephemeral 키면 자동 제거)
 #       https://login.tailscale.com/admin/machines
 
 set -e
 
-TAILSCALE_AUTH_KEY="${1:-}"
-TAILSCALE_HOSTNAME="${2:-vast-gpu-server-2}"
+# 인자 우선, 없으면 환경변수 폴백 (onstart에서는 환경변수로 주입)
+TAILSCALE_AUTH_KEY="${1:-${TAILSCALE_AUTH_KEY:-}}"
+TAILSCALE_HOSTNAME="${2:-${TAILSCALE_HOSTNAME:-vast-gpu-server-2}}"
 
 if [ -z "$TAILSCALE_AUTH_KEY" ]; then
     echo "오류: Tailscale Auth Key가 필요합니다."
-    echo "사용법: $0 <TAILSCALE_AUTH_KEY> [HOSTNAME]"
-    echo "  HOSTNAME 기본값: vast-gpu-server-2"
-    echo "키 발급: https://login.tailscale.com/admin/settings/keys"
+    echo "  수동:    $0 <TAILSCALE_AUTH_KEY> [HOSTNAME]"
+    echo "  onstart: 환경변수 TAILSCALE_AUTH_KEY 설정 후 인자 없이 실행"
+    echo "  키 발급: https://login.tailscale.com/admin/settings/keys"
     exit 1
 fi
 
