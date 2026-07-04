@@ -4,7 +4,7 @@
 #
 # 이 템플릿은 vLLM을 /opt/supervisor-scripts/vllm.sh + /etc/vllm-args.conf 로 띄우고,
 # vLLM은 /metrics 를 기본 노출하므로 vLLM/Caddy 설정은 건드리지 않는다.
-# (구버전 supervisor 'VLLM_ARGS=' 방식 템플릿은 setup_gpu.sh 참고 — 이 템플릿엔 비호환)
+# (vLLM 인자·모델은 vast.ai Environment VLLM_MODEL/VLLM_ARGS + /etc/vllm-args.conf 가 결정)
 #
 # 하는 일: tailscale 설치 + supervisor로 상시 실행 + 고정 호스트명으로 tailnet 가입.
 #
