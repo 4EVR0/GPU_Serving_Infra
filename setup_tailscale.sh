@@ -22,10 +22,39 @@ if [ -z "$TAILSCALE_AUTH_KEY" ]; then
     exit 1
 fi
 
+# vast.ai 이미지에 깨진 Ubuntu 미러(예: mirror.rabisu.com)가 박혀 있으면
+# install.sh 안의 apt-get update가 실패해 설치가 중단된다.
+# 실패한 미러 호스트만 공식 저장소(archive.ubuntu.com)로 바꾸고 다시 시도한다.
+ensure_apt_mirror() {
+    local err=/tmp/apt-update.err
+    if apt-get update >/dev/null 2>"$err" && ! grep -q '^E:' "$err"; then
+        return 0
+    fi
+    local hosts
+    hosts=$(grep -oE 'https?://[^ /]+/ubuntu(/| |$)' "$err" | sed -E 's#^https?://([^/]+)/ubuntu.*#\1#' \
+        | grep -vE '^(archive|security)\.ubuntu\.com$' | sort -u || true)
+    if [ -z "$hosts" ]; then
+        echo "apt-get update 실패 (미러 문제 아님):"
+        cat "$err"
+        return 1
+    fi
+    local files
+    files=$(grep -rlE --include='*.list' --include='*.sources' --include='sources.list' \
+        "$(echo "$hosts" | paste -sd'|' -)" /etc/apt/sources.list /etc/apt/sources.list.d 2>/dev/null || true)
+    for host in $hosts; do
+        echo "깨진 미러 감지: ${host} → archive.ubuntu.com 으로 교체"
+        for f in $files; do
+            sed -i.bak -E "s#https?://${host//./\\.}/ubuntu#http://archive.ubuntu.com/ubuntu#g" "$f"
+        done
+    done
+    apt-get update
+}
+
 echo "===== [1/3] Tailscale 설치 ====="
 if command -v tailscale &>/dev/null; then
     echo "이미 설치됨, 스킵"
 else
+    command -v apt-get &>/dev/null && ensure_apt_mirror
     curl -fsSL https://tailscale.com/install.sh | sh
 fi
 
