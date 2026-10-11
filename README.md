@@ -78,10 +78,11 @@ tail -f /var/log/portal/vllm.log    # "Application startup complete" 뜨면 완�
    TAILSCALE_AUTH_KEY=tskey-auth-xxxxxxxx
    TAILSCALE_HOSTNAME=vast-gpu-server-2
    HF_TOKEN=hf_xxxxxxxx          # HF 다운로드 인증 (rate limit 해제·가속). 미설정 시 로그에 unauthenticated 경고
-   VLLM_MODEL=cyankiwi/Qwen3.5-9B-AWQ-4bit   # 채택 모델(AWQ int4, 이슈 #37) — 템플릿 기본값(bf16) 오버라이드
+   VLLM_MODEL=Qwen/Qwen3.5-9B   # 채택 모델(bf16, 2026-10-11). AWQ int4는 cyankiwi/Qwen3.5-9B-AWQ-4bit
    ```
-   > **모델은 AWQ int4 채택** (4EVR0-Server#37, 2026-07-07): bf16 대비 decode **2.4×**·동시 처리량 **2.25×**,
-   > judge 품질 게이트 통과. 가중치 17.7GB→**5.3GB**라 콜드스타트 다운로드도 1/3.
+   > **모델은 bf16 사용** (2026-10-11): AWQ int4는 decode **2.4×**·동시 처리량 **2.25×**(4EVR0-Server#37)였지만,
+   > 실제 응답의 오류 건수로 다시 비교하니 프롬프트 금지 표현을 더 자주 어겨 정확성 우선으로 bf16으로 되돌렸다.
+   > bf16 가중치는 17.7GB라 RTX 3090(24GB)에서 KV 캐시 여유가 작다. 동시 처리량은 부하 측정으로 확인할 것.
    > Mac `.env` 의 `GPU_MODEL` 도 같은 값으로 맞출 것.
    > **접속**: 템플릿 기본 `VLLM_ARGS` 는 `--host 127.0.0.1`(localhost 전용)이라 `:18000` 외부 접근 불가.
    > 아래 On-start 가 `/etc/vllm-args.conf` 에 `--host 0.0.0.0` 을 덧붙여 오버라이드한다.
@@ -143,7 +144,7 @@ curl -s http://vast-gpu-server-2.tailb70036.ts.net:18000/v1/models   # vLLM 모�
 → **콜드 재기동 ~165s → ~110s (−33%).** (측정: RTX 3090, AWQ int4 5.3GB + HF_TOKEN, 10GB 볼륨.
 남는 최대 비용은 매 부팅 cudagraph/KV 캡처 ~94s — 캐시 대상 아님.)
 
-> ⚠️ **볼륨 크기**: AWQ(5.3G)면 10GB 가능, bf16(17.7G) 병행은 32GB+. **이미지는 `vastai/vllm`(cuda-13.0) 필수** —
+> ⚠️ **볼륨 크기**: bf16(17.7G)은 24GB+, AWQ(5.3G)만 쓰면 10GB 가능, 둘 다 보관하면 32GB+. **이미지는 `vastai/vllm`(cuda-13.0) 필수** —
 > 공식 `vllm/vllm-openai:v0.23.0`은 Qwen3.5 아키텍처 인스펙션 실패(`Qwen3_5ForConditionalGeneration failed to be inspected`).
 
 **보조 수단:**
@@ -163,7 +164,7 @@ vllm serve $VLLM_MODEL $VLLM_ARGS $AUTO_PARALLEL_ARGS $(cat /etc/vllm-args.conf)
 
 | 소스 | 위치 | 현재 값 |
 |---|---|---|
-| `VLLM_MODEL` | vast.ai Environment | `cyankiwi/Qwen3.5-9B-AWQ-4bit` (**AWQ 채택**, #37 — 이전 bf16 `Qwen/Qwen3.5-9B`) |
+| `VLLM_MODEL` | vast.ai Environment | `Qwen/Qwen3.5-9B` (**bf16**, 2026-10-11 — 2026-07~10은 AWQ `cyankiwi/Qwen3.5-9B-AWQ-4bit`, #37) |
 | `VLLM_ARGS` | vast.ai Environment | `--max-num-seqs 8 --max-model-len 32000 --enable-auto-tool-choice --tool-call-parser qwen3_coder --reasoning-parser qwen3 --download-dir /workspace/models --host 127.0.0.1 --port 18000` |
 | `AUTO_PARALLEL_ARGS` | vllm.sh 자동 | `--tensor-parallel-size 1` (GPU_COUNT) |
 | `/etc/vllm-args.conf` | onstart 이 씀 (마지막 append) | `--compilation-config '{"cudagraph_capture_sizes":[1..8]}'` |
@@ -181,7 +182,7 @@ vllm serve $VLLM_MODEL $VLLM_ARGS $AUTO_PARALLEL_ARGS $(cat /etc/vllm-args.conf)
 > 따라서 supervisor `environment=` 오버라이드는 **덮여서 무효** — `/etc/environment` 의 `VLLM_MODEL` 을
 > sed 로 바꾸고 vLLM 을 재기동해야 한다. (재기동 시 `pkill -9 -f "EngineCor[e]"` 로 GPU 회수 확인 필수)
 
-서빙 모델은 `VLLM_MODEL` 이 결정(**현재 `cyankiwi/Qwen3.5-9B-AWQ-4bit`** — AWQ int4 채택, #37).
+서빙 모델은 `VLLM_MODEL` 이 결정(**현재 `Qwen/Qwen3.5-9B`** — bf16, 2026-10-11).
 Mac `.env` 의 `GPU_MODEL` 이 이와 **일치**해야 한다(불일치 시 404 → 추천이 규칙기반으로 폴백).
 
 ### Prefix caching 확인
